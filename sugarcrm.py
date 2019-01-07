@@ -22,14 +22,15 @@ import requests
 class Session:
 
     def __init__(self, url, username, password, app="Python", lang="en_us",
-                 verify=True):
+                 verify=True, proxies=None, auth=None):
         self.url = url
         self.username = username
         self.application = app
         self.language = lang
         self.verify = verify
+        self.proxies = proxies
 
-        result = self.login(username, password)
+        result = self.login(username, password, auth=auth)
         self.session_id = result['id']
 
     def _request(self, method, params):
@@ -39,7 +40,7 @@ class Session:
             'response_type': "JSON",
             'rest_data': json.dumps(params),
         }
-        r = requests.post(self.url, data=data, verify=self.verify)
+        r = requests.post(self.url, data=data, verify=self.verify, proxies=self.proxies)
         if r.status_code == 200:
             return json.loads(r.text.replace("&#039;", "'"))
         raise SugarError("SugarCRM API _request returned status code %d (%s)"
@@ -204,12 +205,20 @@ class Session:
         '''
         return hashlib.md5(password.encode('utf8')).hexdigest()
 
-    def login(self, username, password, app="Python", lang="en_us"):
+    @staticmethod
+    def local_auth(password):
+        '''
+        Local authentication
+        '''
+        return password
+
+    def login(self, username, password, app="Python", lang="en_us", auth=None):
         """Logs a user into the SugarCRM application."""
+        _auth = auth if auth and callable(auth) else Session.remote_auth
         data = [
             {
                 'user_name': username,
-                'password': password
+                'password': _auth(password)
             },
             app,
             [{
